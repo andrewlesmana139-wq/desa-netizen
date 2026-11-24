@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Desa Netizen – Game Warga</title>
+<style>
+:root{--bg:#0f1b33;--card:#1a2a4d;--ink:#f4f1e6;--mut:#a9b6d3;--acc:#f5b800;--navy:#1b2a4a;--red:#d62828;--line:#2c4170;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#fff4dc;--card:#fff;--ink:#1b2a4a;--mut:#5c6b8a;--line:#e2d6b5}}
+:root[data-theme="light"]{--bg:#fff4dc;--card:#fff;--ink:#1b2a4a;--mut:#5c6b8a;--line:#e2d6b5}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:520px;margin-inline:auto;padding:10px}
+.hd{background:#1b2a4a;color:#fff;border:3px solid var(--acc);border-radius:14px;padding:8px;text-align:center}
+.hd b{display:block;color:var(--acc);font-size:20px;letter-spacing:1px}
+.st{display:flex;justify-content:space-around;font-weight:700;font-size:15px}
+.lv{font-size:12px;color:var(--mut);text-align:center;margin:6px 0}
+#cv{display:block;width:100%;height:min(58vh,520px);border-radius:14px;border:3px solid var(--acc);touch-action:none;background:#7cc66a}
+.nav{display:flex;gap:6px;margin:10px 0 4px}.nav button{flex:1}
+button{font:inherit;font-weight:700;border:2px solid #1b2a4a;background:var(--card);color:var(--ink);border-radius:12px;padding:11px 8px;cursor:pointer}
+button.on,button.pri{background:var(--acc);color:#1b2a4a}
+button.red{background:var(--red);color:#fff;border-color:var(--red)}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin-inline:auto;max-height:62vh;overflow:auto;background:var(--bg);border:3px solid var(--acc);border-bottom:0;border-radius:18px 18px 0 0;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 -8px 24px #0008}
+.sheet[hidden]{display:none}
+input{font:inherit;width:100%;padding:10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);margin:6px 0}
+.card{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chips span{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px}
+.ty{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0}
+.ty button{padding:6px 2px;font-size:12px;line-height:1.2}.ty button b{display:block;font-size:22px}
+.row{display:flex;align-items:center;gap:10px}.row .g{flex:1}.row small{color:var(--mut)}
+.msg{font-size:13px;color:var(--mut);text-align:center;margin:4px 0}
+h3{margin:0 0 6px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.top button{padding:4px 12px}
+</style></head><body>
+<div class="hd"><b>DESA NETIZEN</b><div class="st"><span>WARGA : <span id="nw">0</span></span><span>BANGUNAN : <span id="nb">0</span></span></div></div>
+<div class="lv" id="lv"></div>
+<canvas id="cv"></canvas>
+<div class="nav" id="nav"></div>
+<div class="msg" id="msg"></div>
+<div class="sheet" id="sheet" hidden></div>
+<script>
+const TIPE={toko:['🏪','Toko',22,'#e07a5f'],kantor:['🏢','Kantor',52,'#5b8def'],hotel:['🏨','Hotel',62,'#c9a227'],stadion:['🏟️','Stadion',30,'#7b6cf6'],taman:['🌳','Taman',12,'#4caf50'],masjid:['🕌','Masjid',38,'#2a9d8f'],sekolah:['🏫','Sekolah',34,'#f4a261'],klinik:['🏥','Klinik',36,'#e5e5e5']};
+/* ISI SETELAH SETUP FIREBASE (lihat petunjuk). Kosong = mode demo di perangkat. */
+const CONFIG={DB_URL:'https://desa-netijen01-default-rtdb.asia-southeast1.firebasedatabase.app',API_KEY:'AIzaSyDmTkNTkQ-c48FapwYBHUhx1YnCWiUMQ5Y',ADMIN_EMAIL:'andrewlesmana139@gmail.com'};
+const NAMES=['warga','usulan','likes','bangunan'];
+const $=s=>document.querySelector(s);
+function h(t,a,...k){const e=document.createElement(t);for(const x in a||{}){if(x==='class')e.className=a[x];else if(x.startsWith('on'))e[x]=a[x];else e.setAttribute(x,a[x])}k.flat().forEach(c=>e.append(c));return e}
+let data={warga:[],usulan:[],likes:[],bangunan:[]},be=null,uid=null,kades=false,tab=null,pick='toko',cam=0,bubble='Ayo usul bangunan!',seen=null;const pop={};
+try{uid=localStorage.getItem('dnid')}catch(e){}
+if(!uid){uid='u'+Math.random().toString(36).slice(2,10);try{localStorage.setItem('dnid',uid)}catch(e){}}
+const say=t=>{$('#msg').textContent=t};
+const rid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const hash=s=>{let n=7;for(const c of String(s))n=(n*31+c.charCodeAt(0))>>>0;return n};
+
+function localBE(){
+  let s={};try{s=JSON.parse(localStorage.getItem('dn2')||'{}')}catch(e){}
+  NAMES.forEach(n=>s[n]=s[n]||[]);
+  if(!s.seeded){s.seeded=1;s.warga=[{id:'a',nama:'Aulia'},{id:'b',nama:'Joko'},{id:'c',nama:'ig.ciekjoa'},{id:'d',nama:'aribeb8'}];
+    s.bangunan=[{id:'k1',tipe:'toko',nama:'Toko Warga'},{id:'k2',tipe:'taman',nama:'Taman'}];
+    s.usulan=[{id:'s1',tipe:'stadion',nama:'Stadion Netizen',by:'Joko',t:1},{id:'s2',tipe:'hotel',nama:'Hotel Dubai',by:'Aulia',t:2}];
+    s.likes=[{id:'s1_a',pid:'s1'},{id:'s1_b',pid:'s1'},{id:'s2_c',pid:'s2'}];}
+  const subs=[],save=()=>{try{localStorage.setItem('dn2',JSON.stringify(s))}catch(e){}},emit=n=>subs.forEach(f=>f(n,s[n].slice()));
+  return{local:true,sub(f){subs.push(f);NAMES.forEach(n=>f(n,s[n].slice()))},
+    set(n,id,d){s[n]=s[n].filter(x=>x.id!==id).concat([{id,...d}]);save();emit(n)},
+    del(n,id){s[n]=s[n].filter(x=>x.id!==id);save();emit(n)}};
+}
+function restBE(){
+  const base=CONFIG.DB_URL.replace(/\/$/,'');let tok='',subs=[],last='',R={};
+  const url=(p,a)=>base+p+'.json'+(a&&tok?'?auth='+tok:'');
+  const req=(m,p,b,a)=>fetch(url(p,a),{method:m,body:b===undefined?undefined:JSON.stringify(b)}).then(r=>{if(!r.ok)throw 0}).catch(()=>say('Gagal menyimpan, coba lagi.'));
+  const ent=o=>Object.entries(o||{}).map(([id,v])=>({id,...v}));
+  const out=()=>{const L=[];for(const p in R.likes||{})for(const u in R.likes[p])L.push({id:p+'_'+u,pid:p});
+    const d={warga:ent(R.warga),usulan:ent(R.usulan),likes:L,bangunan:ent(R.bangunan).sort((a,b)=>(a.t||0)-(b.t||0))};
+    subs.forEach(f=>NAMES.forEach(n=>f(n,d[n])))};
+  const poll=()=>fetch(url('',0)).then(r=>r.json()).then(j=>{const q=JSON.stringify(j);if(q===last)return;last=q;R=j||{};out()}).catch(()=>{});
+  return{local:false,token:t=>{tok=t},sub(f){subs.push(f);poll();setInterval(poll,5000)},
+    set(n,id,d){
+      if(n==='likes'){const u=id.split('_')[1];R.likes=R.likes||{};R.likes[d.pid]=Object.assign(R.likes[d.pid]||{},{[u]:true});out();req('PUT','/likes/'+d.pid+'/'+u,true)}
+      else{R[n]=R[n]||{};R[n][id]=d;out();req('PUT','/'+n+'/'+id,d,n==='bangunan')}},
+    del(n,id){
+      if(n==='likes'){const[p,u]=id.split('_');if(R.likes&&R.likes[p])delete R.likes[p][u];out();req('DELETE','/likes/'+p+'/'+u)}
+      else{if(R[n])delete R[n][id];out();req('DELETE','/'+n+'/'+id,undefined,n==='usulan')}}};
+}
+async function adminLogin(email,pw){
+  try{const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+CONFIG.API_KEY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw,returnSecureToken:true})}).then(r=>r.json());
+    if(!r.idToken)return false;be.token(r.idToken);kades=true;setTimeout(()=>adminLogin(email,pw),50*60*1000);render();return true}catch(e){return false}
+}
+function start(b){be=b;kades=b.local;seen=null;data={warga:[],usulan:[],likes:[],bangunan:[]};
+  b.sub((n,a)=>{if(be!==b)return;data[n]=a;if(n==='bangunan'){if(seen){a.forEach(x=>{if(!seen.has(x.id))pop[x.id]=performance.now()})}seen=new Set(a.map(x=>x.id))}render()});
+  say(b.local?'Mode demo: data hanya tersimpan di perangkat ini.':'Desa online: semua warga melihat desa yang sama.');}
+function boot(){start(CONFIG.DB_URL?restBE():localBE())}
+
+const me=()=>data.warga.find(w=>w.id===uid);
+const likesOf=id=>data.likes.filter(l=>l.pid===id).length;
+const ranked=()=>data.usulan.slice().sort((a,b)=>likesOf(b.id)-likesOf(a.id)||(a.t||0)-(b.t||0));
+function render(){
+  $('#nw').textContent=data.warga.length;$('#nb').textContent=data.bangunan.length;
+  const nb=data.bangunan.length;
+  $('#lv').textContent=nb<5?'Status: Dusun kecil':nb<15?'Status: Desa maju':nb<30?'Status: Kota kecil':'Status: Gaya Kota Dubai!';
+  const top=ranked()[0];bubble=top?'Teratas: '+top.nama+' ❤'+likesOf(top.id):'Ayo usul bangunan!';
+  const nv=$('#nav');nv.replaceChildren();
+  [['warga','👥 Warga'],['usul','🏗️ Usul'],['vote','❤ Vote']].forEach(([k,l])=>nv.append(h('button',{class:tab===k?'on':'',onclick:()=>{tab=tab===k?null:k;render()}},l)));
+  const M=$('#sheet');if(tab&&M.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;M.replaceChildren();M.hidden=!tab;if(!tab)return;
+  M.append(h('div',{class:'top'},h('b',{},{warga:'Warga Desa',usul:'Usul Bangunan',vote:'Vote Usulan'}[tab]),h('button',{onclick:()=>{tab=null;render()}},'✕')));
+  if(tab==='warga')tWarga(M);else if(tab==='usul')tUsul(M);else tVote(M);
+}
+function needJoin(M){M.append(h('div',{class:'card'},'Jadi warga dulu di tab Warga untuk ikut mengusul dan vote.'))}
+function tWarga(M){
+  const c=h('div',{class:'card'});
+  if(!me()){const i=h('input',{maxlength:'16',placeholder:'Nama / username kamu'});
+    c.append(h('h3',{},'Mau jadi warga juga?'),i,h('button',{class:'pri',style:'width:100%',onclick:()=>{const n=i.value.trim();if(!n)return say('Isi nama dulu.');be.set('warga',uid,{nama:n.slice(0,16)});tab=null;say('Selamat datang, warga baru! Cari namamu di jalan desa.')}},'Follow = Jadi Warga'));}
+  else c.append(h('h3',{},'Selamat datang, '+me().nama+'!'),h('div',{},'Kamu sudah jadi warga. Usulkan bangunan dan vote usulan terbaik.'));
+  M.append(c);
+  if(CONFIG.DB_URL&&!kades){const e=h('input',{type:'email',placeholder:'Email Kepala Desa',value:CONFIG.ADMIN_EMAIL}),p=h('input',{type:'password',placeholder:'Password'});
+    M.append(h('div',{class:'card'},h('h3',{},'Masuk Kepala Desa'),e,p,h('button',{style:'width:100%',onclick:async()=>{say('Masuk...');say(await adminLogin(e.value.trim(),p.value)?'Kamu masuk sebagai Kepala Desa.':'Email atau password salah.')}},'Masuk')))}
+  const w=h('div',{class:'card'},h('h3',{},'Warga desa'));const ch=h('div',{class:'chips'});
+  data.warga.slice(-40).reverse().forEach(x=>ch.append(h('span',{},x.nama)));w.append(ch);M.append(w);
+}
+function tUsul(M){
+  if(!me())return needJoin(M);
+  const c=h('div',{class:'card'});const ty=h('div',{class:'ty'});
+  for(const k in TIPE)ty.append(h('button',{class:pick===k?'on':'',onclick:()=>{pick=k;render()}},h('b',{},TIPE[k][0]),TIPE[k][1]));
+  const i=h('input',{maxlength:'30',placeholder:'Nama bangunan (opsional)'});
+  c.append(ty,i,h('button',{class:'pri',style:'width:100%',onclick:()=>{be.set('usulan',rid(),{tipe:pick,nama:i.value.trim().slice(0,30)||TIPE[pick][1]+' '+me().nama,by:me().nama,t:Date.now()});tab='vote';say('Usulan terkirim! Kumpulkan like.');render()}},'Kirim usulan'));
+  M.append(c);
+}
+function tVote(M){
+  if(!me())return needJoin(M);
+  const L=ranked();
+  if(!L.length)return M.append(h('div',{class:'card'},'Belum ada usulan. Jadi yang pertama di tab Usul!'));
+  L.forEach((u,idx)=>{
+    const lid=u.id+'_'+uid,liked=data.likes.some(l=>l.id===lid),T=TIPE[u.tipe]||['🏠'];
+    M.append(h('div',{class:'card row'},h('div',{style:'font-size:28px'},T[0]),h('div',{class:'g'},h('b',{},u.nama),h('br'),h('small',{},'oleh '+u.by+(idx===0?' · teratas':''))),
+      h('button',{class:liked?'on':'',onclick:()=>liked?be.del('likes',lid):be.set('likes',lid,{pid:u.id})},'❤ '+likesOf(u.id)),kades?h('button',{onclick:()=>be.del('usulan',u.id)},'🗑'):''));
+    if(kades&&idx===0)M.append(h('button',{class:'red',style:'width:100%;margin-bottom:8px',onclick:()=>{be.set('bangunan',rid(),{tipe:u.tipe,nama:u.nama,t:Date.now()});be.del('usulan',u.id);tab=null;say('Kepala Desa membangun: '+u.nama+'!')}},'KEPALA DESA: BANGUN USULAN TERATAS'));
+  });
+}
+
+/* ===== Dunia game (canvas) ===== */
+const cv=$('#cv'),x=cv.getContext('2d');
+function rr(a,b,w,hh,r,f){x.beginPath();x.roundRect(a,b,w,hh,r);if(f){x.fillStyle=f;x.fill()}}
+function shade(c,k){const n=parseInt(c.slice(1),16);const f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return'rgb('+f(n>>16)+','+f(n>>8&255)+','+f(n&255)+')'}
+function building(b,cx,by,t){
+  const T=TIPE[b.tipe]||['🏠','',30,'#999'],bw=64,bh=T[2]+16,l=cx-bw/2,r=cx+bw/2;
+  const age=pop[b.id]?Math.min(1,(t-pop[b.id])/500):1,k=age<1?0.3+0.7*(1-Math.pow(1-age,3))+Math.sin(age*9)*0.05*(1-age):1;
+  x.save();x.translate(cx,by);x.scale(k,k);x.translate(-cx,-by);
+  x.fillStyle='#0003';x.beginPath();x.ellipse(cx+6,by,bw/2+10,6,0,0,7);x.fill();
+  x.fillStyle=T[3];x.fillRect(l,by-bh,bw,bh);
+  x.fillStyle=shade(T[3],.65);x.beginPath();x.moveTo(r,by-bh);x.lineTo(r+10,by-bh-12);x.lineTo(r+10,by-12);x.lineTo(r,by);x.fill();
+  x.fillStyle=shade(T[3],1.25);x.beginPath();x.moveTo(l,by-bh);x.lineTo(r,by-bh);x.lineTo(r+10,by-bh-12);x.lineTo(l+10,by-bh-12);x.fill();
+  x.fillStyle='#fff7b0';for(let yy=by-bh+6;yy<by-14;yy+=11)for(let xx=l+7;xx<r-8;xx+=14)x.fillRect(xx,yy,7,6);
+  x.fillStyle='#3a2a1a';x.fillRect(cx-5,by-12,10,12);
+  x.font='20px serif';x.textAlign='center';x.fillText(T[0],cx+5,by-bh-15);
+  x.restore();
+}
+function person(px,py,name,hs,t,big){
+  const hue=hs%360,bob=Math.sin(t/110+hs)*1.4,sc=big?1.9:1;
+  x.save();x.translate(px,py+bob);x.scale(sc,sc);
+  x.fillStyle='#0003';x.beginPath();x.ellipse(0,0,6,2.5,0,0,7);x.fill();
+  x.fillStyle='#222';x.fillRect(-3,-8,2,8);x.fillRect(1,-8,2,8);
+  x.fillStyle=big?'#8a5a2b':'hsl('+hue+',70%,55%)';rr(-5,-18,10,11,3,x.fillStyle);
+  x.fillStyle='#f1c9a0';x.beginPath();x.arc(0,-22,5,0,7);x.fill();
+  if(big){x.fillStyle='#111';x.fillRect(-5,-29,10,4);x.fillRect(-3,-32,6,4);x.fillRect(-3,-21,6,2)}
+  else{x.fillStyle='hsl('+hue+',40%,25%)';x.beginPath();x.arc(0,-24,5,Math.PI,0);x.fill()}
+  x.restore();
+  if(name){x.font='bold 8px system-ui';const w=x.measureText(name).width+8;x.textAlign='center';rr(px-w/2,py-40*sc/1.3-10,w,11,3,'#fff8d8');x.fillStyle='#1b2a4a';x.fillText(name,px,py-40*sc/1.3-1.5)}
+}
+let drag=null;
+cv.onpointerdown=e=>{drag=e.clientY;cv.setPointerCapture(e.pointerId)};
+cv.onpointermove=e=>{if(drag===null)return;cam+=(drag-e.clientY)/(cv.clientWidth/360);drag=e.clientY};
+cv.onpointerup=cv.onpointercancel=()=>{drag=null};
+function frame(t){
+  const r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1,W=Math.round(r.width*dpr),H=Math.round(r.height*dpr);
+  if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
+  const s=r.width/360,Hl=r.height/s;x.setTransform(dpr*s,0,0,dpr*s,0,0);
+  const rows=Math.max(5,Math.ceil((data.bangunan.length+1)/2)+2),WH=rows*72+150;
+  cam=Math.max(0,Math.min(cam,WH-Hl));const top=WH-Hl-cam,Y=v=>v-top;
+  x.fillStyle='#7cc66a';x.fillRect(0,0,360,Hl);
+  x.fillStyle='#c9c3b0';x.fillRect(128,0,104,Hl);x.fillStyle='#4a4f5c';x.fillRect(135,0,90,Hl);
+  x.fillStyle='#f5d24a';for(let v=(WH%40);v<WH;v+=40)x.fillRect(178,Y(v),4,18);
+  for(let rw=rows-1;rw>=0;rw--)for(let sd=0;sd<2;sd++){
+    const base=Y(WH-130-rw*72),px=sd?236:20;if(base<-30||base>Hl+130)continue;
+    const b=data.bangunan[rw*2+sd];
+    x.fillStyle='#a6dc8a';x.fillRect(px,base-58,104,58);x.strokeStyle='#5aa14a';x.setLineDash([4,3]);x.strokeRect(px+.5,base-57.5,103,57);x.setLineDash([]);
+    if(b)building(b,px+52,base-6,t);
+    else{x.fillStyle='#fff';x.fillRect(px+22,base-34,60,14);x.fillStyle='#d62828';x.font='bold 9px system-ui';x.textAlign='center';x.fillText('KAVLING',px+52,base-24)}
+  }
+  const span=WH+100;
+  data.warga.slice(-24).forEach(w=>{const hs=hash(w.nama+w.id),dir=hs%2?1:-1;let wy=((t/45)*(0.4+(hs%5)/6)*dir+hs*37)%span;if(wy<0)wy+=span;wy-=50;
+    if(w.id===uid)x.globalAlpha=1;const py=Y(wy);if(py>-30&&py<Hl+30)person(142+(hs%7)*12+(dir>0?0:0),py,w.nama,hs,t,false)});
+  const ky=Y(WH-34);person(180,ky,'',211,t,true);
+  x.fillStyle='#d62828';rr(142,ky-92,76,15,4,'#d62828');x.fillStyle='#fff';x.font='bold 9px system-ui';x.textAlign='center';x.fillText('KEPALA DESA',180,ky-81);
+  x.font='bold 9px system-ui';const bw=Math.min(210,x.measureText(bubble).width+16);rr(180-bw/2,ky-122,bw,18,8,'#fff');x.fillStyle='#1b2a4a';x.fillText(bubble,180,ky-109);
+  requestAnimationFrame(frame);
+}
+boot();requestAnimationFrame(frame);
+</script></body></html>
